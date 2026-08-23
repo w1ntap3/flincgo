@@ -1,0 +1,9 @@
+build/
+sdkconfig.old
+sdkconfig.ci
+compile_commands.json
+.clangd
+__pycache__/
+*.pyc
+CMakeCache.txt
+CMakeFiles/
