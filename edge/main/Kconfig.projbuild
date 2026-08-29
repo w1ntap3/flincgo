@@ -1,9 +1,9 @@
-menu "Wi-Fi Configuration"
+menu "FlinCGo Edge Configuration"
     config WIFI_SSID
         string "WiFi SSID"
-        default "change_in_menuconfig"
+        default "MUST_CHANGE_THIS"
 
     config WIFI_PASSWORD
         string "WiFi Password"
-        default "change_in_menuconfig"
+        default "MUST_CHANGE_THIS"
 endmenu
