@@ -7,9 +7,11 @@
 #include "esp_wifi_default.h"
 #include "esp_wifi_types_generic.h"
 #include "freertos/idf_additions.h"
+#include "freertos/projdefs.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -47,11 +49,21 @@ struct __attribute__((__packed__)) protocol_info {
 // STATIC VARIABLE DEFINITIONS
 static esp_netif_t *ap_netif;
 
-static esp_err_t connect_to_collector(const char *ssid, const char *password) {
-  if (AP_SSID == NULL) {
+static esp_err_t connect_to_collector(void) {
+  size_t ssid_len = strlen(AP_SSID);
+  size_t pass_len = strlen(AP_PASS);
+  if ((ssid_len == 0) || (AP_SSID[0] == '\0')) {
     ESP_LOGE(WIFI_TAG,
-             "The config has not provided a valid SSID. (ssid=\"%s\")", ssid);
+             "The config has not provided a valid SSID. (ssid=\"%s\")",
+             AP_SSID);
     return ESP_ERR_WIFI_SSID;
+  } else if (ssid_len > MAX_SSID_LEN || pass_len > MAX_PASSPHRASE_LEN) {
+    // Using MAX_SSID_LEN and MAX_PASSPHRASE_LEN to adapt if ESP changes the
+    // fundamenta lvalues
+    ESP_LOGE(WIFI_TAG,
+             "The config-provided SSID or password are too long.\nSSID length: "
+             "%d (Max is %d)\nPassword length: %d (Max is %d)",
+             ssid_len, MAX_SSID_LEN, pass_len, MAX_PASSPHRASE_LEN);
   }
 
   ap_netif = esp_netif_create_default_wifi_ap();
@@ -65,11 +77,11 @@ static esp_err_t connect_to_collector(const char *ssid, const char *password) {
   }
   ESP_LOGI(WIFI_TAG, "Successfully initialized Wi-Fi.");
 
-  // WPA2_PSK wifi Access Point with 1 allowed connection
+  // WPA2_PSK wifi Access Point at channel 1 with 1 allowed connection
   wifi_config_t wifi_cfg = {.ap = {.ssid = AP_SSID,
                                    .ssid_len = strlen(AP_SSID),
                                    .ssid_hidden = 0,
-                                   .channel = 0,
+                                   .channel = 1,
                                    .max_connection = 1,
                                    .authmode = WIFI_AUTH_WPA2_PSK,
                                    .password = AP_PASS}};
@@ -91,10 +103,10 @@ static esp_err_t connect_to_collector(const char *ssid, const char *password) {
     for (uint8_t retries = 0; retries < WIFI_MAX_RETRIES; retries++) {
       ESP_LOGW(WIFI_TAG,
                "Wi-Fi is still connecting while setting a config. Retrying to "
-               "set the config (%d)",
+               "set the config (%d). Wait 1s",
                retries + 1); // display as retry 1 when the variable is 0, pure
                              // convenience thing
-      vTaskDelay(1000);
+      vTaskDelay(pdMS_TO_TICKS(1000));
       err = esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg);
       if (err != ESP_ERR_WIFI_STATE)
         break;
@@ -119,15 +131,23 @@ static esp_err_t connect_to_collector(const char *ssid, const char *password) {
 
 void app_main(void) {
   esp_err_t err = nvs_flash_init();
-  if ((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NO_MEM)) {
+  if (err != ESP_OK) {
     err = nvs_flash_erase();
     if (err != ESP_OK) {
       ESP_LOGE(NVS_TAG,
-               "Could not initialize default NVS Flash partition. (%s)",
+               "Could not erase the default NVS Flash partition after "
+               "initialization failure. (%s)",
                esp_err_to_name(err));
       return;
     }
-    nvs_flash_init();
+    err = nvs_flash_init();
+    if (err != ESP_OK) {
+      ESP_LOGE(NVS_TAG,
+               "Could not initialize default NVS Flash partition despite "
+               "erasing it after first fail. (%s)",
+               esp_err_to_name(err));
+      return;
+    }
   }
   ESP_LOGI(NVS_TAG, "Successfully initialized default NVS Flash.");
 
@@ -135,13 +155,23 @@ void app_main(void) {
   if ((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NO_MEM)) {
     err = nvs_flash_erase_partition(NVS_PARTITION);
     if (err != ESP_OK) {
-      ESP_LOGE(NVS_TAG, "Could not initialize \"%s\" NVS Flash partition (%s).",
+      ESP_LOGE(NVS_TAG,
+               "Could not erase the \"%s\" NVS Flash partition after "
+               "initialization failure. (%s)",
                NVS_PARTITION, esp_err_to_name(err));
       return;
     }
-    nvs_flash_init_partition(NVS_PARTITION);
+    err = nvs_flash_init_partition(NVS_PARTITION);
+    if (err != ESP_OK) {
+      ESP_LOGE(NVS_TAG,
+               "Could not initialize \"%s\" NVS Flash partition despite "
+               "erasing it after first fail. (%s)",
+               NVS_PARTITION, esp_err_to_name(err));
+      return;
+    }
   }
-  ESP_LOGI(NVS_TAG, "Successfully initialized \"%s\" NVS Flash partition.");
+  ESP_LOGI(NVS_TAG, "Successfully initialized \"%s\" NVS Flash partition.",
+           NVS_PARTITION);
   err = esp_netif_init();
   if (err == ESP_FAIL) {
     ESP_LOGE(NETIF_TAG,
@@ -158,14 +188,13 @@ void app_main(void) {
   }
   ESP_LOGI(EVENT_LOOP_TAG, "Successfully initialized Default Event Loop.");
 
-  err = connect_to_collector(AP_SSID, AP_PASS);
+  err = connect_to_collector();
   if (err == ESP_OK) {
     ESP_LOGI(WIFI_TAG, "Successfully initialized a Wi-Fi Access Point.");
   }
 
   while (1) {
-    printf("we waiting and we good baby\n");
-    vTaskDelay(1000);
+    ;
   }
   return;
 }
