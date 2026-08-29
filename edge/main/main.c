@@ -49,7 +49,8 @@ static esp_netif_t *ap_netif;
 
 static esp_err_t connect_to_collector(const char *ssid, const char *password) {
   if (AP_SSID == NULL) {
-    ESP_LOGE(WIFI_TAG, "The config has not provided a valid SSID.");
+    ESP_LOGE(WIFI_TAG,
+             "The config has not provided a valid SSID. (ssid=\"%s\")", ssid);
     return ESP_ERR_WIFI_SSID;
   }
 
@@ -58,7 +59,9 @@ static esp_err_t connect_to_collector(const char *ssid, const char *password) {
   esp_err_t err = 0;
   err = esp_wifi_init(&wifi_init_cfg);
   if (err == ESP_ERR_NO_MEM) {
-    ESP_LOGE(WIFI_TAG, "Could not initialize Wi-Fi.");
+    ESP_LOGE(WIFI_TAG, "Could not initialize Wi-Fi. (%s)",
+             esp_err_to_name(err));
+    return err;
   }
   ESP_LOGI(WIFI_TAG, "Successfully initialized Wi-Fi.");
 
@@ -76,8 +79,11 @@ static esp_err_t connect_to_collector(const char *ssid, const char *password) {
   }
   err = esp_wifi_set_mode(WIFI_MODE_AP);
   if (err == ESP_ERR_WIFI_NOT_INIT) {
-    ESP_LOGE(WIFI_TAG, "Unexpected error, Wi-Fi was not initialized despite "
-                       "passing the check for initialization");
+    ESP_LOGE(WIFI_TAG,
+             "Unexpected error, Wi-Fi was not initialized despite "
+             "passing the check for initialization. (%s)",
+             esp_err_to_name(err));
+    return err;
   }
 
   err = esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg);
@@ -97,36 +103,57 @@ static esp_err_t connect_to_collector(const char *ssid, const char *password) {
   if (err != ESP_OK) {
     ESP_LOGE(WIFI_TAG,
              "Config passed to esp_wifi_set_confg() is invalid or "
-             "internal NVS error occured."); // im rushing to my friend, lazy to
-                                             // decouple the error
-    return ESP_ERR_WIFI_NOT_STARTED;
+             "internal NVS error occured. (%s)",
+             esp_err_to_name(err)); // im rushing to my friend, lazy to
+                                    // decouple the error
+    return err;
+  }
+
+  err = esp_wifi_start();
+  if (err != ESP_OK) {
+    ESP_LOGE(WIFI_TAG, "Could not start Wi-Fi. (%s)", esp_err_to_name(err));
+    return err;
   }
   return ESP_OK;
 }
 
 void app_main(void) {
-  esp_err_t err = nvs_flash_init_partition(NVS_PARTITION);
+  esp_err_t err = nvs_flash_init();
+  if ((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NO_MEM)) {
+    err = nvs_flash_erase();
+    if (err != ESP_OK) {
+      ESP_LOGE(NVS_TAG,
+               "Could not initialize default NVS Flash partition. (%s)",
+               esp_err_to_name(err));
+      return;
+    }
+    nvs_flash_init();
+  }
+  ESP_LOGI(NVS_TAG, "Successfully initialized default NVS Flash.");
+
   err = nvs_flash_init_partition(NVS_PARTITION);
   if ((err == ESP_ERR_NVS_NO_FREE_PAGES) || (err == ESP_ERR_NO_MEM)) {
     err = nvs_flash_erase_partition(NVS_PARTITION);
     if (err != ESP_OK) {
-      ESP_LOGE(NVS_TAG, "Could not initialize NVS Flash.");
+      ESP_LOGE(NVS_TAG, "Could not initialize \"%s\" NVS Flash partition (%s).",
+               NVS_PARTITION, esp_err_to_name(err));
       return;
     }
     nvs_flash_init_partition(NVS_PARTITION);
   }
-  ESP_LOGI(NVS_TAG, "Successfully initialized NVS Flash.");
-
+  ESP_LOGI(NVS_TAG, "Successfully initialized \"%s\" NVS Flash partition.");
   err = esp_netif_init();
   if (err == ESP_FAIL) {
     ESP_LOGE(NETIF_TAG,
-             "Could not initialize TCP/IP stack (esp-netif module).");
+             "Could not initialize TCP/IP stack (esp-netif module). (%s)",
+             esp_err_to_name(err));
     return;
   }
   ESP_LOGI(NETIF_TAG, "Successfully initialized the TCP/IP stack.");
   err = esp_event_loop_create_default();
-  if ((err == ESP_ERR_NO_MEM) || (err = ESP_FAIL)) {
-    ESP_LOGE(EVENT_LOOP_TAG, "Could not initialize Default Event Loop.");
+  if ((err == ESP_ERR_NO_MEM) || (err == ESP_FAIL)) {
+    ESP_LOGE(EVENT_LOOP_TAG, "Could not initialize Default Event Loop., %s",
+             esp_err_to_name(err));
     return;
   }
   ESP_LOGI(EVENT_LOOP_TAG, "Successfully initialized Default Event Loop.");
@@ -135,4 +162,10 @@ void app_main(void) {
   if (err == ESP_OK) {
     ESP_LOGI(WIFI_TAG, "Successfully initialized a Wi-Fi Access Point.");
   }
+
+  while (1) {
+    printf("we waiting and we good baby\n");
+    vTaskDelay(1000);
+  }
+  return;
 }
