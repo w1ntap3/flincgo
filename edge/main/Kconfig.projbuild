@@ -6,4 +6,9 @@ menu "FlinCGo Edge Configuration"
     config FLINCGO_AP_PASS
         string "FlinCGo Access Point Password"
         default ""
+
+    config FLINCGO_STA_PORT
+        int "FlinCGo Station Port"
+        range 1 65535
+        default ""
 endmenu

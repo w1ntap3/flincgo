@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 // MACRO DEFINITIONS
-#define FLINCGO_PROTOCOL_MAGIC_BYTES 4
+#define FLINCGO_PROTOCOL_MAGIC_BYTES 4 // F C G O
 
 // TYPE DEFINITIONS
 typedef uint64_t flincgo_timestamp_t;
@@ -13,7 +13,7 @@ typedef uint16_t flincgo_item_t;
 
 // STRUCT DEFINITIONS
 // note: its all Little Endian bytes
-struct __attribute__((__packed__)) protocol_info {
+struct __attribute__((__packed__)) flincgo_phdr_t {
   uint8_t magic[FLINCGO_PROTOCOL_MAGIC_BYTES]; // Magic bytes for integrity
   uint32_t sequence;                           // To track lost packets
   flincgo_timestamp_t timestamp;               // microseconds since boot

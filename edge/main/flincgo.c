@@ -1,4 +1,5 @@
 #include "flincgo.h"
+#include "cc.h"
 #include "esp_err.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -8,11 +9,14 @@
 #include "esp_wifi_types_generic.h"
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
+#include "lwip/inet.h"
+#include "lwip/netdb.h"
+#include "lwip/sockets.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include <stdint.h>
 #include <string.h>
-// MACRO DEFINITIONS
+
 #define FLINCGO_NVS_PARTITION "flincgo"
 
 #define NVS_TAG "NVS Flash"
@@ -23,7 +27,14 @@
 
 #define WIFI_MAX_RETRIES 10
 
+#define FLINCGO_STATION_IP "192.168.4.2"
+
+// static const uint8_t MAGIC_ARRAY[FLINCGO_PROTOCOL_MAGIC_BYTES] = {'F', 'C',
+// 'G',
+//                                                                   'O'};
+
 static esp_netif_t *ap_netif;
+static int fd;
 
 static esp_err_t flincgo_start_ap(void) {
   size_t ssid_len = strlen(CONFIG_FLINCGO_AP_SSID);
@@ -35,7 +46,7 @@ static esp_err_t flincgo_start_ap(void) {
     return ESP_ERR_WIFI_SSID;
   } else if (ssid_len > MAX_SSID_LEN || pass_len > MAX_PASSPHRASE_LEN) {
     // Using MAX_SSID_LEN and MAX_PASSPHRASE_LEN to adapt if ESP changes the
-    // fundamenta lvalues
+    // fundamental values
     ESP_LOGE(WIFI_TAG,
              "The config-provided SSID or password are too long.\nSSID length: "
              "%d (Max is %d)\nPassword length: %d (Max is %d)",
@@ -106,6 +117,37 @@ static esp_err_t flincgo_start_ap(void) {
   return ESP_OK;
 }
 
+static esp_err_t flincgo_start_socket() {
+  struct in_addr buf;
+  inet_pton(AF_INET, FLINCGO_STATION_IP, &buf);
+  struct sockaddr_in dest_addr = {.sin_addr = buf,
+                                  .sin_len = sizeof(buf),
+                                  .sin_family = AF_INET,
+                                  .sin_port = htons(CONFIG_FLINCGO_STA_PORT)};
+  memset(dest_addr.sin_zero, 0, sizeof(dest_addr.sin_zero));
+
+  struct addrinfo dest_info = {.ai_addr = (struct sockaddr *)&dest_addr,
+                               .ai_addrlen = sizeof(dest_addr),
+                               .ai_family = dest_addr.sin_family,
+                               .ai_flags = 0,
+                               .ai_protocol = IPPROTO_UDP,
+                               .ai_socktype = SOCK_DGRAM};
+  fd =
+      socket(PF_INET, dest_info.ai_socktype,
+             dest_info.ai_protocol); // PF_INET instead of dest_info.ai_family
+                                     // JUST because i remember from the manuals
+                                     // (boasting about manual code 2026)
+  const char *data = "salam ureym";
+  while (1) {
+    sendto(fd, data, strlen(data), 0, (struct sockaddr *)&dest_addr,
+           sizeof(dest_addr));
+  }
+  sendto(fd, data, strlen(data), 0, (struct sockaddr *)&dest_addr,
+         sizeof(dest_addr));
+  close(fd);
+  return ESP_OK;
+}
+
 esp_err_t flincgo_init(void) {
   esp_err_t err = nvs_flash_init();
   if (err != ESP_OK) {
@@ -167,15 +209,19 @@ esp_err_t flincgo_init(void) {
 
   err = flincgo_start_ap();
   if (err != ESP_OK) {
-    ESP_LOGE(WIFI_TAG, "Could not start Wi-Fi connection. (%s)",
+    ESP_LOGE(WIFI_TAG, "Could not start the Access Point. (%s)",
              esp_err_to_name(err));
     return err;
   }
   ESP_LOGI(WIFI_TAG,
-           "Successfully initialized a Wi-Fi Access "
+           "Successfully started the Wi-Fi Access "
            "Point.\nSSID=\"%s\"\nPassword=\"%s\"",
            CONFIG_FLINCGO_AP_SSID, CONFIG_FLINCGO_AP_PASS);
-
-  ESP_LOGI(FLINCGO_TAG, "Successfully initialized FlinCGo Access Point.");
+  err = flincgo_start_socket();
+  if (err != ESP_OK) {
+    ESP_LOGE(FLINCGO_TAG, "Could not send initial UDP packet.");
+    return err;
+  }
+  ESP_LOGI(FLINCGO_TAG, "Successfully initialized FlinCGo.");
   return ESP_OK;
 }
