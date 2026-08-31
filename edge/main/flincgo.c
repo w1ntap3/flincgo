@@ -10,32 +10,28 @@
 #include "freertos/idf_additions.h"
 #include "freertos/projdefs.h"
 #include "lwip/inet.h"
-#include "lwip/netdb.h"
 #include "lwip/sockets.h"
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 #include <stdint.h>
 #include <string.h>
-
 #define FLINCGO_NVS_PARTITION "flincgo"
 
 #define NVS_TAG "NVS Flash"
 #define EVENT_LOOP_TAG "Default Event Loop"
 #define NETIF_TAG "TCP/IP Stack"
 #define WIFI_TAG "Wi-Fi"
+#define SOCKET_TAG "Socket"
 #define FLINCGO_TAG "FlinCGo"
 
 #define WIFI_MAX_RETRIES 10
 
 #define FLINCGO_STATION_IP "192.168.4.2"
 
-// static const uint8_t MAGIC_ARRAY[FLINCGO_PROTOCOL_MAGIC_BYTES] = {'F', 'C',
-// 'G',
-//                                                                   'O'};
-
 static esp_netif_t *ap_netif;
-static int fd;
+static int fd = -1;
 
+static struct sockaddr_in dest_addr;
 static esp_err_t flincgo_start_ap(void) {
   size_t ssid_len = strlen(CONFIG_FLINCGO_AP_SSID);
   size_t pass_len = strlen(CONFIG_FLINCGO_AP_PASS);
@@ -120,31 +116,17 @@ static esp_err_t flincgo_start_ap(void) {
 static esp_err_t flincgo_start_socket() {
   struct in_addr buf;
   inet_pton(AF_INET, FLINCGO_STATION_IP, &buf);
-  struct sockaddr_in dest_addr = {.sin_addr = buf,
-                                  .sin_len = sizeof(buf),
-                                  .sin_family = AF_INET,
-                                  .sin_port = htons(CONFIG_FLINCGO_STA_PORT)};
+  dest_addr = (struct sockaddr_in){.sin_addr = buf,
+                                   .sin_len = sizeof(buf),
+                                   .sin_family = AF_INET,
+                                   .sin_port = htons(CONFIG_FLINCGO_STA_PORT)};
   memset(dest_addr.sin_zero, 0, sizeof(dest_addr.sin_zero));
 
-  struct addrinfo dest_info = {.ai_addr = (struct sockaddr *)&dest_addr,
-                               .ai_addrlen = sizeof(dest_addr),
-                               .ai_family = dest_addr.sin_family,
-                               .ai_flags = 0,
-                               .ai_protocol = IPPROTO_UDP,
-                               .ai_socktype = SOCK_DGRAM};
-  fd =
-      socket(PF_INET, dest_info.ai_socktype,
-             dest_info.ai_protocol); // PF_INET instead of dest_info.ai_family
-                                     // JUST because i remember from the manuals
-                                     // (boasting about manual code 2026)
-  const char *data = "salam ureym";
-  while (1) {
-    sendto(fd, data, strlen(data), 0, (struct sockaddr *)&dest_addr,
-           sizeof(dest_addr));
-  }
-  sendto(fd, data, strlen(data), 0, (struct sockaddr *)&dest_addr,
-         sizeof(dest_addr));
-  close(fd);
+  fd = socket(PF_INET, SOCK_DGRAM,
+              IPPROTO_UDP); // PF_INET instead of dest_addr.sin_family
+                            // JUST because i remember from the manuals
+                            // (boasting about manual code 2026)
+
   return ESP_OK;
 }
 
@@ -219,9 +201,46 @@ esp_err_t flincgo_init(void) {
            CONFIG_FLINCGO_AP_SSID, CONFIG_FLINCGO_AP_PASS);
   err = flincgo_start_socket();
   if (err != ESP_OK) {
-    ESP_LOGE(FLINCGO_TAG, "Could not send initial UDP packet.");
+    ESP_LOGE(FLINCGO_TAG, "Could not start a datagram socket.",
+             esp_err_to_name(err));
     return err;
   }
   ESP_LOGI(FLINCGO_TAG, "Successfully initialized FlinCGo.");
+  return ESP_OK;
+}
+
+void flincgo_deinit(void) {
+  ESP_LOGW(FLINCGO_TAG, "Attempting to deinit FlinCGo.");
+  if (fd >= 0) {
+    if (close(fd) != 0) {
+      ESP_LOGW(SOCKET_TAG, "Could not close the socket file descriptor. (%s)",
+               strerror(errno));
+    }
+    fd = -1;
+  }
+  esp_err_t err = 0;
+  err = esp_wifi_stop();
+  if (err != ESP_OK) {
+    ESP_LOGW(WIFI_TAG, "Wi-Fi wasn't stopped. (%s)", esp_err_to_name(err));
+  }
+  err = esp_wifi_deinit();
+  if (err != ESP_OK) {
+    ESP_LOGW(WIFI_TAG, "Could not deinit Wi-Fi. (%s)", esp_err_to_name(err));
+  }
+  esp_netif_destroy_default_wifi(&ap_netif);
+
+  ESP_LOGW(FLINCGO_TAG, "FlincGo has been de-initialized.");
+}
+
+esp_err_t flincgo_send(const struct flincgo_mhdr mhdr) {
+  int bytes_sent = sendto(fd, &mhdr, sizeof(mhdr), 0,
+                          (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+  if (bytes_sent == -1 || bytes_sent == 0) {
+    ESP_LOGE(SOCKET_TAG, "Failed to send a FlinCGo message. (%s)",
+             (!bytes_sent)
+                 ? "No bytes were sent but sendto() didn't return an error"
+                 : strerror(errno));
+    return ESP_ERR_INVALID_RESPONSE;
+  }
   return ESP_OK;
 }
