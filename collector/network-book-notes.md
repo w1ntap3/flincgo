@@ -6,15 +6,29 @@ written by Adam Woodbeck and Jerremy Bowers, both senior lvl SWE's at [barracuda
 
 the book claims it will teach you how to write idiomatic go code to share data in a secure and reliable way.
 
-pg. 36: 
+## gems from the book
+
+pg. 36: damn we're the onus is on us
 > Most of our network applications rely on the transport layer protocols
 to handle the error correction, flow control, retransmission, and transport
 acknowledgment of each segment. However, the TCP/IP model doesn’t
 require every transport layer protocol to fulfill each of those elements. UDP is
 one such example. If your application requires the use of UDP for maximal
 throughput, the onus is on you to implement some sort of error checking or
-session management, since UDP provides neither.
-*this paragraph perfectly encapsulates what we'll be doing with this project.*
+session management, since UDP provides neither
+ 
+pg. 129: funny ass comparison of tcp vs udp
+> When it comes to sending and receiving data, UDP is uncivilized compared
+to TCP. For example, let’s assume your neighbor baked you a pie and wants
+to give it to you. Using TCP to communicate is like your neighbor shouting
+a greeting from her window (her socket address) to your open window (your
+socket address). You hear her greeting and return a greeting of your own
+(the TCP handshake). Your neighbor then delivers your pie. You accept it and
+thankfully acknowledge the pie (the data transfer). You then both exchange
+farewells and go about your business (the termination). By contrast, using
+UDP to communicate is like your neighbor abruptly throwing the pie at your
+window, whether it’s open or not, and awaiting no confirmation that you
+received it
 
 ## ch.1, an overview of networked systems
 
@@ -68,7 +82,9 @@ session management, since UDP provides neither.
 ![tcp ip vs osi](./imgs/screenshot-tcpip-vs-osi.png)
 
 
-## resource location and traffic routing
+## ch.2 resource location and traffic routing
+
+TODO: finish this deeply
 
 > To write effective network programs, you
 need to understand how to use human readable names to identify nodes on the
@@ -78,4 +94,26 @@ makes its way between nodes on the internet, even if
 they’re on opposite sides of the planet. This chapter
 covers those topics and more
 
+## ch.5 unreliable UDP communication 
+
+> Although most networking applications take
+advantage of TCP’s reliability and flow control, the less popular User Datagram Protocol
+(UDP) is nonetheless an important part of the
+TCP/IP stack. UDP is a simple protocol with minimal
+features. Some applications do not require TCP’s feature
+set and session overhead. Those applications, like domain
+name resolution services, opt to use UDP instead.
+
+^ hey, we are one of those applications!
+
+the udp rfc is hilariously small https://www.rfc-editor.org/info/rfc768/
+
+- UDP does not make sure the message got sent (no 3 way handshake) 
+- it does not guarantee they are sent in order, nor does it open up a session and provide flow control. veru lightweight. 
+  - this advertently allows for one udp message to be *multicast* (sent to one ip / load balancer and forgotten about) whereas with tcp youd need to keep a connection open with all those devices
+- max packet length is 65,535 bytes but application layer protocols often limit byte size to avoid `packet fragmentation`
+
+![screenshot-udp-packet](./imgs/screenshot-udp-packet.png)
+
+###
 
