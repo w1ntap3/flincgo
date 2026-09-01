@@ -6,6 +6,9 @@ import (
 	"net"
 )
 
+// INFO: you can check out a more comprehensive guide here;
+// https://github.com/kdiffin/go-echo-server
+
 // pseudo code
 // bind to the udp socket, get its packetconn
 // handle its error
@@ -37,7 +40,7 @@ func echoServerUDP(ctx context.Context, addr string) (net.Addr, error) {
 		buf := make([]byte, 1024)
 		for {
 			n, clientAddr, err := s.ReadFrom(buf)
-			fmt.Printf("read message: %s from clientAddr: %s", string(buf[:n]), clientAddr.String())
+			fmt.Printf("read message: %s from clientAddr: %s\n", string(buf[:n]), clientAddr.String())
 			if err != nil {
 				return
 			}
@@ -45,7 +48,8 @@ func echoServerUDP(ctx context.Context, addr string) (net.Addr, error) {
 			// the reason why we do socket.WriteTo here is because we want the server to know its us, its an echo server.
 			// that's why we're sending it via thsi socket, we couldve sent it through another socket without a problem.
 			// **this is not a stateful connection like tcp**
-			_, err = s.WriteTo(buf[:n], clientAddr)
+			response := fmt.Sprintf("%s: %s", s.LocalAddr().String(), string(buf[:n]))
+			_, err = s.WriteTo([]byte(response), clientAddr)
 			if err != nil {
 				return
 			}

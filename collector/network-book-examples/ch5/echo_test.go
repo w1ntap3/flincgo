@@ -48,12 +48,14 @@ func TestEchoServerUDP(t *testing.T) {
 	}
 }
 
+// INFO: this is my own addition
 func TestEchoServerUDPInteractive(t *testing.T) {
 	// this is a special type of context.WithCancel which cancels whenever signals... is pressed.
 	// this stops the function from blocking on ctx.done.
 	// SIGINT is the unix version of os.Interrupt.
 	// whenever you press ctrl+c the kernel sends SIGINT to the foreground process group of the shell (IDK WTF THAT IS LOL)
 	// SIGTERM is when you try to kill it via the `kill` command in unix systems. the kernel sends the foreground process group SIGKILL.
+	//
 	ctx, cancel := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
