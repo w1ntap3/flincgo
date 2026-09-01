@@ -1,9 +1,14 @@
-menu "Wi-Fi Configuration"
-    config WIFI_SSID
-        string "WiFi SSID"
-        default "change_in_menuconfig"
+menu "FlinCGo Edge Configuration"
+    config FLINCGO_AP_SSID
+        string "FlinCGo Access Point SSID"
+        default ""
 
-    config WIFI_PASSWORD
-        string "WiFi Password"
-        default "change_in_menuconfig"
+    config FLINCGO_AP_PASS
+        string "FlinCGo Access Point Password"
+        default ""
+
+    config FLINCGO_STA_PORT
+        int "FlinCGo Station Port"
+        range 1 65535
+        default ""
 endmenu
