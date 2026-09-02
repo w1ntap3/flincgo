@@ -28,8 +28,15 @@
 
 #define FLINCGO_STATION_IP "192.168.4.2"
 
+/* -1 = never initialized
+ * 0 = not initialized right now but it was before
+ * 1 = currently initialized
+ */
+static int8_t flincgo_initialized = -1;
+
 static esp_netif_t *ap_netif;
 static int fd = -1;
+static struct msg_ring_buf msg_batch;
 
 static struct sockaddr_in dest_addr;
 static esp_err_t flincgo_start_ap(void) {
@@ -130,7 +137,17 @@ static esp_err_t flincgo_start_socket() {
   return ESP_OK;
 }
 
+static inline void flincgo_ring_buf_init(void) {
+  msg_batch = (struct msg_ring_buf){
+      .capacity = CONFIG_FLINCGO_MTU, .read = 0, .write = 0};
+  memset(msg_batch.ring_buf, 0, sizeof(msg_batch.ring_buf));
+  return;
+}
+
 esp_err_t flincgo_init(void) {
+  if (flincgo_initialized == 1) {
+    flincgo_deinit();
+  }
   esp_err_t err = nvs_flash_init();
   if (err != ESP_OK) {
     err = nvs_flash_erase();
@@ -205,11 +222,22 @@ esp_err_t flincgo_init(void) {
              esp_err_to_name(err));
     return err;
   }
-  ESP_LOGI(FLINCGO_TAG, "Successfully initialized FlinCGo.");
+  ESP_LOGI(FLINCGO_TAG, "Successfully initialized FlinCGo networking stack.");
+
+  flincgo_ring_buf_init();
+  flincgo_initialized = 1;
   return ESP_OK;
 }
 
 void flincgo_deinit(void) {
+  if (flincgo_initialized == 0) {
+    ESP_LOGW(FLINCGO_TAG, "FlinCGo is already de-initialized.");
+    return;
+  } else if (flincgo_initialized == -1) {
+    ESP_LOGW(FLINCGO_TAG,
+             "FlincGo cannot de-initialize when it was never initialized.");
+    return;
+  }
   ESP_LOGW(FLINCGO_TAG, "Attempting to deinit FlinCGo.");
   if (fd >= 0) {
     if (close(fd) != 0) {
@@ -229,18 +257,35 @@ void flincgo_deinit(void) {
   }
   esp_netif_destroy_default_wifi(&ap_netif);
 
+  flincgo_initialized = 0;
   ESP_LOGW(FLINCGO_TAG, "FlincGo has been de-initialized.");
 }
 
-esp_err_t flincgo_send(const struct flincgo_mhdr mhdr) {
-  int bytes_sent = sendto(fd, &mhdr, sizeof(mhdr), 0,
-                          (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-  if (bytes_sent == -1 || bytes_sent == 0) {
-    ESP_LOGE(SOCKET_TAG, "Failed to send a FlinCGo message. (%s)",
-             (!bytes_sent)
-                 ? "No bytes were sent but sendto() didn't return an error"
-                 : strerror(errno));
-    return ESP_ERR_INVALID_RESPONSE;
+esp_err_t flincgo_quicksend(const struct flincgo_mhdr mhdr,
+                            const char *payload) {
+  if (flincgo_initialized != 1) {
+    ESP_LOGE(
+        FLINCGO_TAG,
+        "Could not send your message. FlinCGo is not currently initialized.");
+    return ESP_ERR_INVALID_STATE;
+  }
+  return ESP_OK;
+}
+esp_err_t flincgo_queue(const struct flincgo_mhdr mhdr, const char *payload) {
+  if (flincgo_initialized != 1) {
+    ESP_LOGE(
+        FLINCGO_TAG,
+        "Could not queue your message. FlinCGo is not currently initialized.");
+    return ESP_ERR_INVALID_STATE;
+  }
+  return ESP_OK;
+}
+esp_err_t flincgo_flush(void) {
+  if (flincgo_initialized != 1) {
+    ESP_LOGE(
+        FLINCGO_TAG,
+        "Could not queue your message. FlinCGo is not currently initialized.");
+    return ESP_ERR_INVALID_STATE;
   }
   return ESP_OK;
 }

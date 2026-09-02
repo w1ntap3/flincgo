@@ -1,7 +1,7 @@
 menu "FlinCGo Edge Configuration"
     config FLINCGO_AP_SSID
         string "FlinCGo Access Point SSID"
-        default ""
+        default "FlinCGo AP"
 
     config FLINCGO_AP_PASS
         string "FlinCGo Access Point Password"
@@ -10,5 +10,9 @@ menu "FlinCGo Edge Configuration"
     config FLINCGO_STA_PORT
         int "FlinCGo Station Port"
         range 1 65535
-        default ""
+        default "20081"
+    config FLINCGO_MTU 
+        int "FlinCGo Maximum Transmission Unit"
+        range 22 65535
+        default "1280"
 endmenu
