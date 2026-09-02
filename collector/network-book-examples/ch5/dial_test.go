@@ -57,6 +57,9 @@ func TestDialUDP(t *testing.T) {
 	if bytes.Equal(buf[:n], interrupt) {
 		t.Fatal("wtf you read messages from the interloper, net.Dial doesnt work.")
 	}
+	if !bytes.Equal(buf[:n], pingMsg) {
+		t.Fatal("expected %q got %q", pingMsg, buf[:n])
+	}
 
 	// INFO: I thought that the .Read method would still return the message from the interloper,
 	// looking back on it, that'd ruin the point of the abstraction anyways. The code blocked here
