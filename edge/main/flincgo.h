@@ -28,10 +28,10 @@ struct __attribute__((__packed__)) flincgo_mhdr {
 
 struct msg_ring_buf {
   uint8_t ring_buf[CONFIG_FLINCGO_MTU];
-  uint16_t write;
-  uint16_t read;
+  uint16_t write_idx;
+  uint16_t read_idx;
   size_t available;
-  uint16_t messages_count;
+  uint16_t message_count;
 };
 
 esp_err_t flincgo_init(void);

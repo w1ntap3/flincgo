@@ -5,20 +5,26 @@
 #include <stdint.h>
 #include <string.h>
 
-const char *message = "Salam from ESP32";
-
 void app_main(void) {
-  // TODO: Add a flincgo_config_t so a user can set some stuff up for himself
-  flincgo_init();
-  struct flincgo_mhdr test_mhdr = {.item_id = 1,
-                                   .magic = FLINCGO_MAGIC,
-                                   .payload_len = strlen(message),
-                                   .sequence = 0,
-                                   .severity = 22,
-                                   .timestamp = 31421};
-  flincgo_quicksend(test_mhdr, message);
+  esp_err_t err = flincgo_init();
+  if (err != ESP_OK) {
+    flincgo_deinit();
+    return;
+  }
+  struct flincgo_mhdr test_mhdr = {
+      .item_id = 1,
+      .magic = FLINCGO_MAGIC,
+      .payload_len = strlen("Successfully talking to you my collecta"),
+      .sequence = 0,
+      .severity = 22,
+      .timestamp = 31421};
+  flincgo_quicksend(test_mhdr, "Successfully talking to you my collecta");
+
   while (1) {
-    flincgo_flush();
+    for (int i = 0; i < 32; i++) {
+      flincgo_queue(test_mhdr, "SACKessfully talking to you my collecta");
+      test_mhdr.sequence++;
+    }
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
   flincgo_deinit();
