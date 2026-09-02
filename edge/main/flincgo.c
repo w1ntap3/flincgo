@@ -28,6 +28,7 @@
 
 #define FLINCGO_STATION_IP "192.168.4.2"
 
+#define MSG_BATCH_MAX_SIZE CONFIG_FLINCGO_MTU
 /* -1 = never initialized
  * 0 = not initialized right now but it was before
  * 1 = currently initialized
@@ -137,13 +138,6 @@ static esp_err_t flincgo_start_socket() {
   return ESP_OK;
 }
 
-static inline void flincgo_ring_buf_init(void) {
-  msg_batch = (struct msg_ring_buf){
-      .capacity = CONFIG_FLINCGO_MTU, .read = 0, .write = 0};
-  memset(msg_batch.ring_buf, 0, sizeof(msg_batch.ring_buf));
-  return;
-}
-
 esp_err_t flincgo_init(void) {
   if (flincgo_initialized == 1) {
     flincgo_deinit();
@@ -224,7 +218,13 @@ esp_err_t flincgo_init(void) {
   }
   ESP_LOGI(FLINCGO_TAG, "Successfully initialized FlinCGo networking stack.");
 
-  flincgo_ring_buf_init();
+  // Ring buffer init
+  msg_batch = (struct msg_ring_buf){.available = MSG_BATCH_MAX_SIZE,
+                                    .read = 0,
+                                    .write = 0,
+                                    .messages_count = 0};
+  memset(msg_batch.ring_buf, 0, sizeof(msg_batch.ring_buf));
+
   flincgo_initialized = 1;
   return ESP_OK;
 }
@@ -271,6 +271,7 @@ esp_err_t flincgo_quicksend(const struct flincgo_mhdr mhdr,
   }
   return ESP_OK;
 }
+
 esp_err_t flincgo_queue(const struct flincgo_mhdr mhdr, const char *payload) {
   if (flincgo_initialized != 1) {
     ESP_LOGE(
@@ -278,8 +279,48 @@ esp_err_t flincgo_queue(const struct flincgo_mhdr mhdr, const char *payload) {
         "Could not queue your message. FlinCGo is not currently initialized.");
     return ESP_ERR_INVALID_STATE;
   }
+
+  if (payload == NULL)
+    return ESP_ERR_INVALID_ARG;
+
+  const size_t payload_strlen = strlen(payload);
+  if (payload_strlen != mhdr.payload_len)
+    return ESP_ERR_INVALID_ARG;
+  const size_t message_size = sizeof(mhdr) + payload_strlen;
+
+  if (message_size > msg_batch.available) {
+    if (message_size > MSG_BATCH_MAX_SIZE) {
+      return ESP_ERR_NO_MEM;
+    }
+    // TODO: check if it fails
+    flincgo_flush();
+  }
+
+  const uint8_t *mhdr_addr = (const uint8_t *)&mhdr;
+
+  for (uint16_t byte = 0; byte < sizeof(mhdr); byte++) {
+    msg_batch.ring_buf[msg_batch.write] = mhdr_addr[byte];
+    msg_batch.write = (msg_batch.write + 1) % MSG_BATCH_MAX_SIZE;
+    msg_batch.available--;
+  }
+
+  for (uint16_t byte = 0; byte < payload_strlen; byte++) {
+    msg_batch.ring_buf[msg_batch.write] = payload[byte];
+    msg_batch.write = (msg_batch.write + 1) % MSG_BATCH_MAX_SIZE;
+    msg_batch.available--;
+  }
+
+  // just check for an overflow, impossible in theory but why not lmao
+  if (msg_batch.messages_count >=
+      (uint16_t)MSG_BATCH_MAX_SIZE / (sizeof(mhdr) + 1)) {
+    ESP_LOGE(FLINCGO_TAG, "Unexpected error, how the hell did "
+                          "msg_batch.messages_count just overflow..");
+    return ESP_ERR_NO_MEM;
+  }
+  msg_batch.messages_count++;
   return ESP_OK;
 }
+
 esp_err_t flincgo_flush(void) {
   if (flincgo_initialized != 1) {
     ESP_LOGE(
@@ -287,5 +328,7 @@ esp_err_t flincgo_flush(void) {
         "Could not queue your message. FlinCGo is not currently initialized.");
     return ESP_ERR_INVALID_STATE;
   }
+  // just a stub
+  msg_batch.available = MSG_BATCH_MAX_SIZE;
   return ESP_OK;
 }

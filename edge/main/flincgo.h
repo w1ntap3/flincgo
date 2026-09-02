@@ -9,6 +9,7 @@
 // MACRO DEFINITIONS
 #define FLINCGO_MAGIC_SIZE 4 // F C G O
 #define FLINCGO_MAGIC {'F', 'C', 'G', 'O'}
+
 // TYPE DEFINITIONS
 typedef uint64_t flincgo_timestamp_t;
 typedef uint16_t flincgo_item_t;
@@ -29,7 +30,8 @@ struct msg_ring_buf {
   uint8_t ring_buf[CONFIG_FLINCGO_MTU];
   uint16_t write;
   uint16_t read;
-  uint16_t capacity;
+  size_t available;
+  uint16_t messages_count;
 };
 
 esp_err_t flincgo_init(void);
