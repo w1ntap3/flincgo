@@ -8,7 +8,7 @@ the book claims it will teach you how to write idiomatic go code to share data i
 
 ## gems from the book
 
-pg. 36: damn the onus is on us
+pg. 36: damn the onus _is_ on us
 
 > Most of our network applications rely on the transport layer protocols
 > to handle the error correction, flow control, retransmission, and transport
@@ -98,6 +98,22 @@ TODO: finish this deeply
 
 ## ch.5 unreliable UDP communication
 
+### takeaways
+
+the mental model is simple here. just focus on the tradeoffs of UDP. Mostly talks about the interfaces and functions which we use to work with udp sockets in go `net.ListenPacket`, `net.Dial`; and to write and read from those sockets `s.WriteTo`, `s.ReadFrom`.
+
+net.Dial messed me up first using it, because I was like how tf am I _directly listening_ to the port specified. turns out im not.
+
+calling net.Dial _creates an ephemeral port which can `write` to the `specified remote address` and `reads` messages addressed `back to the ephemeral port from the specified remote address`_
+
+UDP is a datagram / message oriented protocol, at the kernel level **either a message / datagram gets sent fully or fails**. That's again why packet fragmentation is problematic. So when sending a UDP message, we can (probably) be sure that it either got sent fully, or it errored. No partials.
+
+^figured this out while writing the code [in the dial_test.go example](./network-book-examples/ch5/dial_test.go) by hand
+
+when writing tests, you want to fatal everytime theres an error (usually) because its supposed to model the perfect way the code should work. That's why we call t.Fatal a lot.
+
+### chapter summary
+
 > Although most networking applications take
 > advantage of TCP’s reliability and flow control, the less popular User Datagram Protocol
 > (UDP) is nonetheless an important part of the
@@ -108,13 +124,17 @@ TODO: finish this deeply
 
 ^ hey, we are one of those applications!
 
-the udp rfc is hilariously small https://www.rfc-editor.org/info/rfc768/
+the [udp rfc](https://www.rfc-editor.org/info/rfc768/) is hilariously small
 
 - UDP does not make sure the message got sent (no 3 way handshake)
 - it does not guarantee they are sent in order, nor does it open up a session and provide flow control. veru lightweight.
   - this advertently allows for one udp message to be _multicast_ (sent to one ip / load balancer and forgotten about) whereas with tcp youd need to keep a connection open with all those devices
 - max packet length is 65,535 bytes but application layer protocols often limit byte size to avoid `packet fragmentation`
+  - packet fragmentation is best avoided by the application itself usually, some ppl have automated mechanisms regaridng it though
+- UDP's checksum is calculated by converting the whole packet into 16 bit intergers, taking ones complement (wrapping the bits if 16 bit addition overflows). [theres also a special rule where if its all zeros, they store it as all ones]
 
 ![screenshot-udp-packet](./imgs/screenshot-udp-packet.png)
 
 examples can be seen in [network-book-examples/ch5/](./network-book-examples/ch5/)
+
+## ch. 6 ensuring UDP reliability
