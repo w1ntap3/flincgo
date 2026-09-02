@@ -110,7 +110,7 @@ UDP is a datagram / message oriented protocol, at the kernel level **either a me
 
 ^figured this out while writing the code [in the dial_test.go example](./network-book-examples/ch5/dial_test.go) by hand
 
-when writing tests, you want to fatal everytime theres an error (usually) because its supposed to model the perfect way the code should work. That's why we call t.Fatal a lot.
+~~when writing tests, you want to fatal everytime theres an error (usually) because its supposed to model the perfect way the code should work. That's why we call t.Fatal a lot.~~ -> bad
 
 ### chapter summary
 
