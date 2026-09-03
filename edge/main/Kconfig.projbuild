@@ -1,14 +1,22 @@
 menu "FlinCGo Edge Configuration"
     config FLINCGO_AP_SSID
-        string "FlinCGo Access Point SSID"
-        default ""
+        string "Access Point SSID"
+        default "FlinCGo AP"
 
     config FLINCGO_AP_PASS
-        string "FlinCGo Access Point Password"
+        string "Access Point Password"
         default ""
 
     config FLINCGO_STA_PORT
-        int "FlinCGo Station Port"
+        int "Station Port"
         range 1 65535
-        default ""
+        default "20081"
+    config FLINCGO_MTU 
+        int "Maximum Transmission Unit"
+        range 22 65535
+        default 1280
+    config FLINCGO_FLUSH_DEADLINE
+        int "Automatic Flushing Deadline (ms)"
+        range 0 4294967295
+        default 10000
 endmenu
