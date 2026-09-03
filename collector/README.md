@@ -4,3 +4,5 @@ The implementation of this is powered by the book [Network Programming With Go](
 Notes on the book can be found in [network-book-notes.md](network-book-notes.md)
 
 currently reading the book to try and understand socket programming.
+
+the folder [network-book-examples/] will be removed later once im done w my notes and ready to ship this project to prod
