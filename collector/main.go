@@ -1,61 +1,65 @@
-// msg
 package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
+	"time"
 
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 )
 
-type Packet struct {
-	from    string
-	to      string
-	payload []byte
-}
+const url = "https://charm.sh/"
 
 type model struct {
-	packets   []Packet
-	endpoints []string
-	cursor    int
-	selected  map[int]struct{}
+	textInput textinput.Model
+	status    int
+	err       error
 }
 
-func initialModel() model {
-	return model{
-		selected: make(map[int]struct{}),
+// all IO should be done through functions that implement the tea.Cmd interface and return tea.Msg
+// the tut says this keeps the app simple
+func checkServer() tea.Msg {
+	c := &http.Client{Timeout: 10 * time.Second}
+
+	res, err := c.Get(url)
+	if err != nil {
+		return errMsg{err}
 	}
+
+	return statusMsg(res.StatusCode)
 }
 
-// tea.cmd allows for io
+type statusMsg int
+
+type errMsg struct{ err error }
+
+func (e errMsg) Error() string { return e.err.Error() }
+
 func (m model) Init() tea.Cmd {
-	return nil
+	return checkServer
 }
 
+// INFO: straight from the docs:
+// TLDR: cmd is handled async and the types are to write a switch case which is handled by the update function
+// Internally, Cmds run asynchronously in a goroutine.
+// The Msg they return is collected and sent to our update function for handling
+// Remember those message types we made earlier when we were making the checkServer command?
+// We handle them here. This makes dealing with many asynchronous operations very easy.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case statusMsg:
+		m.status = int(msg)
+		return m, tea.Quit
+
+	case errMsg:
+		m.err = msg
+		return m, tea.Quit
+
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		if msg.Mod == tea.ModCtrl && msg.Code == 'c' {
 			return m, tea.Quit
-
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-
-		case "enter", "space":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
 		}
 	}
 
@@ -63,35 +67,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	s := "What should we buy at the market?\n\n"
-
-	for i, choice := range m.choices {
-		cursor := " "
-		if m.cursor == i {
-			cursor = ">"
-		}
-
-		checked := " "
-		if _, ok := m.selected[i]; ok {
-			checked = "x"
-		}
-
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+	if m.err != nil {
+		return tea.NewView(fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err))
 	}
 
-	s += "\n Press q to quit.\n"
+	s := fmt.Sprintf("checking %s...", url)
 
-	// send the ui for rendering
-	return tea.NewView(s)
+	if m.status > 0 {
+		s += fmt.Sprintf("%d %s!", m.status, http.StatusText(m.status))
+	}
+
+	return tea.NewView("\n" + s + "\n\n")
 }
 
 func main() {
-	fmt.Println("hello world")
-
-	p := tea.NewProgram(initialModel())
-
-	if _, err := p.Run(); err != nil {
-		fmt.Printf("error: %v", err)
+	if _, err := tea.NewProgram(model{}).Run(); err != nil {
+		fmt.Printf("uh oh, there was an error!: %v\n", err)
 		os.Exit(1)
 	}
 }
