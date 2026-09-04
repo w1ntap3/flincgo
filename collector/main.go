@@ -8,11 +8,13 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/w1ntap3/flincgo/collector/internal/decoder"
+	espstub "github.com/w1ntap3/flincgo/collector/internal/esp-stub"
 )
 
 type model struct {
 	textInput textinput.Model
-	logs      []Log
+	logs      []decoder.Log
 	conn      net.PacketConn
 	logTest   string
 	err       error
@@ -22,35 +24,28 @@ func handleDatagram(m model) tea.Cmd {
 	return func() tea.Msg {
 		buf := make([]byte, 1024)
 
+		fmt.Println("before ther ead blocking BLLOCKING ")
 		n, _, err := m.conn.ReadFrom(buf)
 		if err != nil {
 			return errMsg{err: err}
 		}
-		// decodedMsg, _ := decoder.Decode(buf[:n])
+		fmt.Println("readfrom this lol", string(buf))
+		log, err := decoder.Decode(buf[:n])
+		if err != nil {
+			return errMsg{err: err}
+		}
 
-		return string(buf[:n])
+		fmt.Printf("%+v", log)
+		m.logs = append(m.logs, log)
+
+		return log
 	}
 }
 
 // TODO: implement
 
-type MessageHeader struct {
-	Magic      [4]byte
-	Sequence   uint32
-	Timestamp  uint64
-	Severity   uint8
-	ItemID     uint16
-	PayloadLen uint16
-}
-
-type Log struct {
-	MessageHeader
-	payload []byte
-}
-
 type (
 	errMsg struct{ err error }
-	msg    Log
 )
 
 func (e errMsg) Error() string { return e.err.Error() }
@@ -67,8 +62,8 @@ func (m model) Init() tea.Cmd {
 // We handle them here. This makes dealing with many asynchronous operations very easy.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case string:
-		m.logTest = msg
+	case decoder.Log:
+		fmt.Println("YES BRO I GOT THIS MESSAGE")
 		return m, handleDatagram(m)
 
 	case errMsg:
@@ -89,19 +84,23 @@ func (m model) View() tea.View {
 		return tea.NewView(fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err))
 	}
 
-	s := fmt.Sprintf("log %s...", "")
+	fmt.Println("\n\n\n\n\n BRO THIS IS THE LENGTH OF THE LOGS", len(m.logs), "\n\n\n\n\n")
+	var s string
+	for i, log := range m.logs {
+		fmt.Printf("%v\n", log)
+		s += fmt.Sprintf("[%v] %+v: %s\n", i, log.Header, string(log.Payload))
+	}
 
-	s += fmt.Sprintf("%s", m.logTest)
-
-	return tea.NewView("\n" + s + "\n\n")
+	return tea.NewView(fmt.Sprintf("\n %s \n\n", s))
 }
 
 func main() {
-	// err := espstub.MockEdge("127.0.0.1:20081")
-	// if  err != nil {
-	//	log.Printf("starting mock edge: %s", err)
-	//	return
-	// }
+	err := espstub.MockEdge("127.0.0.1:20081")
+	fmt.Println("HI BRO")
+	if err != nil {
+		log.Printf("starting mock edge: %s", err)
+		return
+	}
 
 	c, err := net.ListenPacket("udp", "127.0.0.1:20081")
 	if err != nil {
