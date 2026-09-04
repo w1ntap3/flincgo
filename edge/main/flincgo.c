@@ -81,13 +81,16 @@ static esp_err_t flincgo_start_ap(void) {
   ESP_LOGI(WIFI_TAG, "Successfully initialized Wi-Fi.");
 
   // WPA2_PSK wifi Access Point at channel 1 with 1 allowed connection
-  wifi_config_t wifi_cfg = {.ap = {.ssid = CONFIG_FLINCGO_AP_SSID,
-                                   .ssid_len = strlen(CONFIG_FLINCGO_AP_SSID),
-                                   .ssid_hidden = 0,
-                                   .channel = 1,
-                                   .max_connection = 1,
-                                   .authmode = WIFI_AUTH_WPA2_PSK,
-                                   .password = CONFIG_FLINCGO_AP_PASS}};
+  wifi_config_t wifi_cfg = {0};
+
+  strcpy((char *)wifi_cfg.ap.ssid, CONFIG_FLINCGO_AP_SSID);
+  strcpy((char *)wifi_cfg.ap.password, CONFIG_FLINCGO_AP_PASS);
+
+  wifi_cfg.ap.ssid_len = strlen(CONFIG_FLINCGO_AP_SSID);
+  wifi_cfg.ap.channel = 1;
+  wifi_cfg.ap.max_connection = 1;
+  wifi_cfg.ap.authmode = WIFI_AUTH_WPA2_PSK;
+  wifi_cfg.ap.pairwise_cipher = WIFI_CIPHER_TYPE_CCMP;
   // If password is not set, make the AP open
   if (strlen(CONFIG_FLINCGO_AP_PASS) == 0) {
     wifi_cfg.ap.authmode = WIFI_AUTH_OPEN;
@@ -100,21 +103,37 @@ static esp_err_t flincgo_start_ap(void) {
              esp_err_to_name(err));
     return err;
   }
+  ESP_LOGI(WIFI_TAG,
+           "BEFORE set_config: SSID=\"%s\" password=\"%s\" auth=%d cipher=%d",
+           wifi_cfg.ap.ssid, wifi_cfg.ap.password, wifi_cfg.ap.authmode,
+           wifi_cfg.ap.pairwise_cipher);
+  ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg));
+  // if (err == ESP_ERR_WIFI_STATE) {
+  //   for (uint8_t retries = 0; retries < WIFI_MAX_RETRIES; retries++) {
+  //     ESP_LOGW(WIFI_TAG,
+  //              "Wi-Fi is still connecting while setting a config. Retrying to
+  //              " "set the config (%d). Wait 1s", retries + 1); // display as
+  //              retry 1 when the variable is 0, pure
+  //                            // convenience thing
+  //     vTaskDelay(pdMS_TO_TICKS(1000));
+  //     err = esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg);
+  //     if (err != ESP_ERR_WIFI_STATE)
+  //       break;
+  //   }
+  // }
+  wifi_config_t actual_cfg = {0};
 
-  err = esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg);
-  if (err == ESP_ERR_WIFI_STATE) {
-    for (uint8_t retries = 0; retries < WIFI_MAX_RETRIES; retries++) {
-      ESP_LOGW(WIFI_TAG,
-               "Wi-Fi is still connecting while setting a config. Retrying to "
-               "set the config (%d). Wait 1s",
-               retries + 1); // display as retry 1 when the variable is 0, pure
-                             // convenience thing
-      vTaskDelay(pdMS_TO_TICKS(1000));
-      err = esp_wifi_set_config(WIFI_IF_AP, &wifi_cfg);
-      if (err != ESP_ERR_WIFI_STATE)
-        break;
-    }
+  err = esp_wifi_get_config(WIFI_IF_AP, &actual_cfg);
+  ESP_LOGI(WIFI_TAG, "authmode=%d pairwise_cipher=%d", actual_cfg.ap.authmode,
+           actual_cfg.ap.pairwise_cipher);
+  if (err != ESP_OK) {
+    ESP_LOGE(WIFI_TAG, "esp_wifi_get_config failed: %s", esp_err_to_name(err));
+    return err;
   }
+  ESP_LOGI(WIFI_TAG, "auth=%d cipher=%d", actual_cfg.ap.authmode,
+           actual_cfg.ap.pairwise_cipher);
+  ESP_LOGI(WIFI_TAG, "AP config: SSID=\"%s\", authmode=%d, password=\"%s\"",
+           actual_cfg.ap.ssid, actual_cfg.ap.authmode, actual_cfg.ap.password);
   if (err != ESP_OK) {
     ESP_LOGE(WIFI_TAG,
              "Config passed to esp_wifi_set_confg() is invalid or "
@@ -375,7 +394,7 @@ esp_err_t flincgo_quicksend(const struct flincgo_mhdr mhdr,
   memcpy(compiled_message, (uint8_t *)&mhdr, sizeof(mhdr));
   memcpy(compiled_message + sizeof(mhdr), payload, strlen(payload));
 
-  int bytes_sent = sendto(fd, compiled_message, sizeof(compiled_message), 0,
+  int bytes_sent = sendto(fd, compiled_message, message_size, 0,
                           (struct sockaddr *)&dest_addr, sizeof(dest_addr));
   if (bytes_sent < 0) {
     ESP_LOGE(SOCKET_TAG, "sendto() failed. (errno: %s)", strerror(errno));
@@ -431,16 +450,13 @@ esp_err_t flincgo_queue(const struct flincgo_mhdr mhdr, const char *payload) {
     return ESP_ERR_NO_MEM;
   }
 
-  const uint8_t *mhdr_addr = (const uint8_t *)&mhdr;
+  uint8_t compiled_message[message_size];
 
-  for (uint16_t byte = 0; byte < sizeof(mhdr); byte++) {
-    msg_batch.ring_buf[msg_batch.write_idx] = mhdr_addr[byte];
-    msg_batch.write_idx = (msg_batch.write_idx + 1) % MSG_BATCH_MAX_SIZE;
-    msg_batch.available--;
-  }
+  memcpy(compiled_message, (uint8_t *)&mhdr, sizeof(mhdr));
+  memcpy(compiled_message + sizeof(mhdr), payload, strlen(payload));
 
-  for (uint16_t byte = 0; byte < payload_strlen; byte++) {
-    msg_batch.ring_buf[msg_batch.write_idx] = payload[byte];
+  for (uint16_t byte = 0; byte < message_size; byte++) {
+    msg_batch.ring_buf[msg_batch.write_idx] = compiled_message[byte];
     msg_batch.write_idx = (msg_batch.write_idx + 1) % MSG_BATCH_MAX_SIZE;
     msg_batch.available--;
   }
@@ -491,19 +507,20 @@ esp_err_t flincgo_flush(void) {
     }
 
   } else {
-    uint8_t compiled_message[MSG_BATCH_MAX_SIZE - msg_batch.available];
+    const size_t message_size = MSG_BATCH_MAX_SIZE - msg_batch.available;
+    uint8_t compiled_message[message_size];
     memcpy(compiled_message, msg_batch.ring_buf + msg_batch.read_idx,
            MSG_BATCH_MAX_SIZE - msg_batch.read_idx);
     memcpy(compiled_message + (MSG_BATCH_MAX_SIZE - msg_batch.read_idx),
            msg_batch.ring_buf, msg_batch.write_idx);
-    int bytes_sent = sendto(fd, compiled_message, sizeof(compiled_message), 0,
+    int bytes_sent = sendto(fd, compiled_message, message_size, 0,
                             (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     if (bytes_sent < 0) {
       ESP_LOGE(SOCKET_TAG, "sendto() failed. (errno: %s)", strerror(errno));
       return ESP_ERR_INVALID_RESPONSE;
     }
 
-    if (bytes_sent != sizeof(compiled_message)) {
+    if (bytes_sent != message_size) {
       ESP_LOGE(SOCKET_TAG, "sendto() sent %d bytes, expected %d.", bytes_sent,
                (msg_batch.write_idx - msg_batch.read_idx));
       return ESP_ERR_INVALID_RESPONSE;
