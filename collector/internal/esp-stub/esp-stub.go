@@ -12,9 +12,7 @@ import (
 func MockEdge(addr string) error {
 	// hardcoded for now
 	s, err := net.Dial("udp", addr)
-	fmt.Println("dialed the network")
 	if err != nil {
-		fmt.Println("erorr here connecting to address", err)
 		return fmt.Errorf("connecting to addr %s: %w", addr, err)
 	}
 
@@ -23,9 +21,7 @@ func MockEdge(addr string) error {
 			time.Sleep(time.Second * 2)
 			stub := stubDatagram()
 			_, err = s.Write(stub)
-			fmt.Println("wrote stub datagram %s", string(stub))
 			if err != nil {
-				fmt.Println(err)
 				return
 			}
 		}
@@ -35,8 +31,7 @@ func MockEdge(addr string) error {
 }
 
 func stubDatagram() []byte {
-	payload := make([]byte, 1400)
-
+	payload := []byte("randomly generated log: " + randomWord())
 	const headerSize = 21
 	buf := make([]byte, headerSize+len(payload))
 
