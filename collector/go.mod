@@ -1,4 +1,4 @@
-module github.com/w1ntap3/flincgo/tree/main/collector
+module github.com/w1ntap3/flincgo/collector
 
 go 1.25.12
 
