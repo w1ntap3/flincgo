@@ -24,19 +24,14 @@ func handleDatagram(m model) tea.Cmd {
 	return func() tea.Msg {
 		buf := make([]byte, 1024)
 
-		fmt.Println("before ther ead blocking BLLOCKING ")
 		n, _, err := m.conn.ReadFrom(buf)
 		if err != nil {
 			return errMsg{err: err}
 		}
-		fmt.Println("readfrom this lol", string(buf))
 		log, err := decoder.Decode(buf[:n])
 		if err != nil {
 			return errMsg{err: err}
 		}
-
-		fmt.Printf("%+v", log)
-		m.logs = append(m.logs, log)
 
 		return log
 	}
@@ -63,7 +58,8 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case decoder.Log:
-		fmt.Println("YES BRO I GOT THIS MESSAGE")
+		m.logs = append(m.logs, msg)
+
 		return m, handleDatagram(m)
 
 	case errMsg:
@@ -84,19 +80,23 @@ func (m model) View() tea.View {
 		return tea.NewView(fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err))
 	}
 
-	fmt.Println("\n\n\n\n\n BRO THIS IS THE LENGTH OF THE LOGS", len(m.logs), "\n\n\n\n\n")
 	var s string
+
+	s += "Welcome to flincgo CLI :))\n\n"
+
 	for i, log := range m.logs {
-		fmt.Printf("%v\n", log)
 		s += fmt.Sprintf("[%v] %+v: %s\n", i, log.Header, string(log.Payload))
 	}
 
-	return tea.NewView(fmt.Sprintf("\n %s \n\n", s))
+	s += "\nFlinCGo © 2026 aura ns"
+
+	v := tea.NewView(fmt.Sprintf("%s \n", s))
+	v.AltScreen = true
+	return v
 }
 
 func main() {
 	err := espstub.MockEdge("127.0.0.1:20081")
-	fmt.Println("HI BRO")
 	if err != nil {
 		log.Printf("starting mock edge: %s", err)
 		return
@@ -109,7 +109,6 @@ func main() {
 	if _, err := tea.NewProgram(model{
 		conn: c,
 	}).Run(); err != nil {
-		fmt.Printf("uh oh, there was an error!: %v\n", err)
 		os.Exit(1)
 	}
 }
