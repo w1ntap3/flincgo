@@ -107,7 +107,6 @@ net.Dial messed me up first using it, because I was like how tf am I _directly l
 calling net.Dial _creates an ephemeral port which can `write` to the `specified remote address` and `reads` messages addressed `back to the ephemeral port from the specified remote address`_
 
 UDP is a datagram / message oriented protocol, at the kernel level **either a message / datagram gets sent fully or fails**. That's again why packet fragmentation is problematic. So when sending a UDP message, we can (probably) be sure that it either got sent fully, or it errored. No partials.
-
 ^figured this out while writing the code [in the dial_test.go example](./network-book-examples/ch5/dial_test.go) by hand
 
 ~~when writing tests, you want to fatal everytime theres an error (usually) because its supposed to model the perfect way the code should work. That's why we call t.Fatal a lot.~~ -> bad
