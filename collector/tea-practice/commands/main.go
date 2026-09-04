@@ -66,6 +66,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func GetMessage() {
+}
+
 func (m model) View() tea.View {
 	if m.err != nil {
 		return tea.NewView(fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err))

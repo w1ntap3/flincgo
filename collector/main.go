@@ -2,43 +2,61 @@ package main
 
 import (
 	"fmt"
-	"net/http"
+	"log"
+	"net"
 	"os"
-	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 )
 
-const url = "https://charm.sh/"
-
 type model struct {
 	textInput textinput.Model
-	status    int
+	logs      []Log
+	conn      net.PacketConn
+	logTest   string
 	err       error
 }
 
-// all IO should be done through functions that implement the tea.Cmd interface and return tea.Msg
-// the tut says this keeps the app simple
-func checkServer() tea.Msg {
-	c := &http.Client{Timeout: 10 * time.Second}
+func handleDatagram(m model) tea.Cmd {
+	return func() tea.Msg {
+		buf := make([]byte, 1024)
 
-	res, err := c.Get(url)
-	if err != nil {
-		return errMsg{err}
+		n, _, err := m.conn.ReadFrom(buf)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		// decodedMsg, _ := decoder.Decode(buf[:n])
+
+		return string(buf[:n])
 	}
-
-	return statusMsg(res.StatusCode)
 }
 
-type statusMsg int
+// TODO: implement
 
-type errMsg struct{ err error }
+type MessageHeader struct {
+	Magic      [4]byte
+	Sequence   uint32
+	Timestamp  uint64
+	Severity   uint8
+	ItemID     uint16
+	PayloadLen uint16
+}
+
+type Log struct {
+	MessageHeader
+	payload []byte
+}
+
+type (
+	errMsg struct{ err error }
+	msg    Log
+)
 
 func (e errMsg) Error() string { return e.err.Error() }
 
 func (m model) Init() tea.Cmd {
-	return checkServer
+	return handleDatagram(m)
 }
 
 // INFO: straight from the docs:
@@ -49,9 +67,9 @@ func (m model) Init() tea.Cmd {
 // We handle them here. This makes dealing with many asynchronous operations very easy.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case statusMsg:
-		m.status = int(msg)
-		return m, tea.Quit
+	case string:
+		m.logTest = msg
+		return m, handleDatagram(m)
 
 	case errMsg:
 		m.err = msg
@@ -71,17 +89,27 @@ func (m model) View() tea.View {
 		return tea.NewView(fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err))
 	}
 
-	s := fmt.Sprintf("checking %s...", url)
+	s := fmt.Sprintf("log %s...", "")
 
-	if m.status > 0 {
-		s += fmt.Sprintf("%d %s!", m.status, http.StatusText(m.status))
-	}
+	s += fmt.Sprintf("%s", m.logTest)
 
 	return tea.NewView("\n" + s + "\n\n")
 }
 
 func main() {
-	if _, err := tea.NewProgram(model{}).Run(); err != nil {
+	// err := espstub.MockEdge("127.0.0.1:20081")
+	// if  err != nil {
+	//	log.Printf("starting mock edge: %s", err)
+	//	return
+	// }
+
+	c, err := net.ListenPacket("udp", "127.0.0.1:20081")
+	if err != nil {
+		log.Fatalf("could not start server connection: %s", err)
+	}
+	if _, err := tea.NewProgram(model{
+		conn: c,
+	}).Run(); err != nil {
 		fmt.Printf("uh oh, there was an error!: %v\n", err)
 		os.Exit(1)
 	}
