@@ -96,19 +96,17 @@ func (m model) View() tea.View {
 }
 
 func main() {
-	err := espstub.MockEdge("127.0.0.1:20081")
+	err := espstub.MockEdge("0.0.0.0:20081")
 	if err != nil {
 		log.Printf("starting mock edge: %s", err)
 		return
 	}
 
-	c, err := net.ListenPacket("udp", "127.0.0.1:20081")
+	c, err := net.ListenPacket("udp", "0.0.0.0:20081")
 	if err != nil {
 		log.Fatalf("could not start server connection: %s", err)
 	}
-	if _, err := tea.NewProgram(model{
-		conn: c,
-	}).Run(); err != nil {
+	if _, err := tea.NewProgram(model{conn: c}).Run(); err != nil {
 		os.Exit(1)
 	}
 }
