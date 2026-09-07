@@ -106,7 +106,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not start server connection: %s", err)
 	}
-	if _, err := tea.NewProgram(model{conn: c}).Run(); err != nil {
+	if _, err := tea.NewProgram(model{
+		conn: c,
+	}).Run(); err != nil {
 		os.Exit(1)
 	}
 }
