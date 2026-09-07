@@ -4,6 +4,7 @@ package espstub
 import (
 	"encoding/binary"
 	"fmt"
+	"math/rand/v2"
 	mrand "math/rand/v2"
 	"net"
 	"time"
@@ -30,8 +31,10 @@ func MockEdge(addr string) error {
 	return nil
 }
 
+var counter uint32
+
 func stubDatagram() []byte {
-	payload := []byte("randomly generated log: " + randomWord())
+	payload := []byte("random word: " + randomWord())
 	const headerSize = 21
 	buf := make([]byte, headerSize+len(payload))
 
@@ -40,16 +43,19 @@ func stubDatagram() []byte {
 	// AI GENERATED:
 	// TODO: understand the binary lib better
 	// Sequence number: uniquely identifies/orders this message.
-	binary.LittleEndian.PutUint32(buf[4:8], 42)
+	binary.LittleEndian.PutUint32(buf[4:8], counter)
+	counter++
 
 	// Timestamp: when the message was created.
-	binary.LittleEndian.PutUint64(buf[8:16], 8_421_337)
+	now := time.Now().Unix()
+	randomSeconds := rand.Int64N(now)
+	binary.LittleEndian.PutUint64(buf[8:16], uint64(randomSeconds))
 
 	// Severity: single byte, so no byte-order conversion is needed.
-	buf[16] = 2
+	buf[16] = byte(rand.UintN(3))
 
 	// Item ID: identifies the type/source of the logged item.
-	binary.LittleEndian.PutUint16(buf[17:19], 7)
+	binary.LittleEndian.PutUint16(buf[17:19], uint16(mrand.UintN(1000)))
 
 	// Payload length: tells the decoder how many payload bytes follow the header.
 	binary.LittleEndian.PutUint16(buf[19:21], uint16(len(payload)))

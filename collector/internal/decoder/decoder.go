@@ -29,7 +29,7 @@ func Decode(datagram []byte) (Log, error) {
 	if !bytes.Equal(datagram[:4], magicBytes) {
 		return Log{}, fmt.Errorf("invalid magic: %v does not match %v", datagram[:4], magicBytes)
 	}
-	copy(datagram[:4], l.Header.Magic[:])
+	copy(l.Header.Magic[:], datagram[:4])
 
 	// sequence
 	n, err := binary.Decode(datagram[4:8], binary.LittleEndian, &l.Header.Sequence)
