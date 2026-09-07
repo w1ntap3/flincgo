@@ -16,7 +16,6 @@ type model struct {
 	textInput textinput.Model
 	logs      []decoder.Log
 	conn      net.PacketConn
-	logTest   string
 	err       error
 }
 
