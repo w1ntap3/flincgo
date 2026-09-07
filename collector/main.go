@@ -87,7 +87,7 @@ func (m model) View() tea.View {
 		s += fmt.Sprintf("[%v] %+v: %s\n", i, log.Header, string(log.Payload))
 	}
 
-	s += "\nFlinCGo © 2026 aura ns"
+	s += "\nFlinCGo © 2026 aura"
 
 	v := tea.NewView(fmt.Sprintf("%s \n", s))
 	v.AltScreen = true
@@ -105,7 +105,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("could not start server connection: %s", err)
 	}
-	if _, err := tea.NewProgram(model{conn: c}).Run(); err != nil {
+	if _, err := tea.NewProgram(model{
+		conn: c,
+	}).Run(); err != nil {
 		os.Exit(1)
 	}
 }
