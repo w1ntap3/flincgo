@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	tea "charm.land/bubbletea/v2"
 	lg "charm.land/lipgloss/v2"
@@ -32,8 +33,8 @@ func (m model) View() tea.View {
 }
 
 func renderLogMatrix(logs []decoder.Log, terminalWidth int) string {
-	var i int
-	var s []string
+	var row int
+	s := []string{""}
 
 	var logRow string
 	for _, newLog := range logs {
@@ -42,16 +43,31 @@ func renderLogMatrix(logs []decoder.Log, terminalWidth int) string {
 
 		if lg.Width(rowWithNewLog) < terminalWidth {
 			logRow = rowWithNewLog
+			s[row] = logRow
 		} else {
 			// start a new row with the current card
-
 			logRow = logCard
-			s = append(s, logCard)
+			s = append(s, logRow)
+			row++
 		}
 
 	}
 
-	return s
+	var s2 string
+
+	for _, str := range s {
+		f, err := os.Create("debug.log")
+		if err != nil {
+			return ""
+		}
+		_, err = fmt.Fprintf(f, "%v\n\n", logRow)
+		if err != nil {
+			return ""
+		}
+		s2 = lg.JoinVertical(lg.Left, s2, str)
+	}
+
+	return s2
 }
 
 func renderLogCard(log decoder.Log) string {
