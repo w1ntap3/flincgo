@@ -19,7 +19,7 @@ func MockEdge(addr string) error {
 
 	go func() {
 		for {
-			time.Sleep(time.Second * 2)
+			time.Sleep(time.Millisecond * 500)
 			stub := stubDatagram()
 			_, err = s.Write(stub)
 			if err != nil {
