@@ -6,18 +6,17 @@ import (
 	"net"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
+	lg "charm.land/lipgloss/v2"
 	"github.com/w1ntap3/flincgo/collector/internal/decoder"
 )
 
 type model struct {
 	terminalWidth  int
 	terminalHeight int
-	logs           []string
+	logs           []decoder.Log
 	// the index of the string we're currently at in the rendering
-	currentRow int
-	conn       net.PacketConn
-	err        error
+	conn net.PacketConn
+	err  error
 }
 
 func (m model) View() tea.View {
@@ -25,15 +24,34 @@ func (m model) View() tea.View {
 		return tea.NewView(fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err))
 	}
 
-	var s string
-
-	for _, log := range m.logs {
-		s = lipgloss.JoinVertical(lipgloss.Left, log, s)
-	}
+	s := renderLogMatrix(m.logs, m.terminalWidth)
 
 	v := tea.NewView(s)
 	v.AltScreen = true
 	return v
+}
+
+func renderLogMatrix(logs []decoder.Log, terminalWidth int) string {
+	var i int
+	var s []string
+
+	var logRow string
+	for _, newLog := range logs {
+		logCard := renderLogCard(newLog)
+		rowWithNewLog := lg.JoinHorizontal(lg.Left, logRow, logCard)
+
+		if lg.Width(rowWithNewLog) < terminalWidth {
+			logRow = rowWithNewLog
+		} else {
+			// start a new row with the current card
+
+			logRow = logCard
+			s = append(s, logCard)
+		}
+
+	}
+
+	return s
 }
 
 func renderLogCard(log decoder.Log) string {
@@ -41,7 +59,7 @@ func renderLogCard(log decoder.Log) string {
 
 	body := string(log.Payload)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, header, body)
+	content := lg.JoinVertical(lg.Left, header, body)
 
 	return Card.Margin(0, 1).Render(content)
 }
@@ -77,15 +95,7 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case decoder.Log:
-		logCard := renderLogCard(msg)
-		rowWithNewCard := lipgloss.JoinHorizontal(lipgloss.Left, m.logs[m.currentRow], logCard)
-		if lipgloss.Width(rowWithNewCard) < m.terminalWidth {
-			m.logs[m.currentRow] = rowWithNewCard
-		} else {
-			m.logs = append(m.logs, renderLogCard(msg))
-			m.currentRow++
-		}
-
+		m.logs = append(m.logs, msg)
 		return m, handleDatagram(m)
 
 	case errMsg:
@@ -95,7 +105,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.terminalWidth = msg.Width
 		m.terminalHeight = msg.Height
-		return m, handleDatagram(m)
+		return m, nil
 
 	case tea.KeyPressMsg:
 		if msg.Mod == tea.ModCtrl && msg.Code == 'c' {
@@ -112,9 +122,7 @@ func Start() error {
 		log.Fatalf("could not start server connection: %s", err)
 	}
 	if _, err := tea.NewProgram(model{
-		conn:       c,
-		currentRow: 0,
-		logs:       []string{""},
+		conn: c,
 	}).Run(); err != nil {
 		return err
 	}
