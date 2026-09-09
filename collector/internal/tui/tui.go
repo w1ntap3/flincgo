@@ -49,7 +49,9 @@ func renderLogMatrix(logs []decoder.Log, terminalWidth int) string {
 		}
 	}
 	// if theres any leftover unfinished row, add it
-	s = append(s, logRow)
+	if len(logRow) > 0 {
+		s = append(s, logRow)
+	}
 
 	var s2 string
 	for _, str := range s {
